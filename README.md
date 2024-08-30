@@ -6,6 +6,12 @@ This project demonstrates the **real-time stream processing** and **batch proces
 
 The project is designed to showcase how large volumes of Twitter-like data can be handled efficiently in real-time, offering insights and analysis through advanced data processing techniques.
 
+## 🗂️ Architecture Diagram
+
+Below is the architecture diagram for the project:
+
+![Architecture Diagram](https://github.com/rohan-chandrashekar/Stream-and-Batch-Processing-of-Tweets-with-Apache-Kafka-and-Spark/blob/main/Architecture%20Diagram.jpeg)
+
 ## 🛠️ Technologies and Frameworks
 
 - **Operating System:** Ubuntu 20.04/22.04 or any Linux environment
