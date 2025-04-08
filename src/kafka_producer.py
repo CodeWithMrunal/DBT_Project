@@ -2,13 +2,14 @@ import random
 from kafka import KafkaProducer
 import mysql.connector
 import time
+import json
 
 # connect to the MySQL database
 mydb = mysql.connector.connect(
-    host="YOUR_HOST_NAME",
-    user="YOUR_USER_NAME_OF_DATABASE",
-    password="DATABASE_PASSWORD",
-    database="DATABASE_NAME"
+    host="localhost",
+    user="root",
+    password="CodeMrunal2004",
+    database="tweet_hashtags_db"
 )
 
 # create a cursor to execute SQL queries
@@ -32,8 +33,13 @@ while True:
         print("Executing SQL query for tweets...")
         # publish each new tweet to the Kafka topic
         for tweet_id, tweet, date_time, language in cursor:
-            
-            message = bytes(f"{tweet_id},{tweet},{date_time},{language}", encoding='utf-8')
+            message_dict = {
+            "tweet_id": tweet_id,
+            "tweet": tweet,
+            "date_time": str(date_time),
+            "language": language
+            }
+            message = bytes(json.dumps(message_dict), encoding='utf-8')
         
             # print the data being processed
             print("Publishing tweet:", tweet)

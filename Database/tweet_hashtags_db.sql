@@ -21,6 +21,8 @@ SET time_zone = "+00:00";
 -- Database: `tweet_hashtags_db`
 --
 
+use tweet_hashtags_db;
+
 -- --------------------------------------------------------
 
 --

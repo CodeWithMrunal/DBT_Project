@@ -1,3 +1,5 @@
+USE TABLES_TWEET_DATABASE;
+
 CREATE TABLE tweets (
     tweet_id BIGINT PRIMARY KEY,
     tweet TEXT,
