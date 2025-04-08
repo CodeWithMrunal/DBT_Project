@@ -1,0 +1,9 @@
+6. Document Your Comparison in a Table
+
+Example:
+Metric	        Streaming Mode	                Batch Mode
+Execution Time	~2s per micro-batch (50 tweets)	~0.4s for 500 tweets
+Accuracy	    ✅ Same counts	               ✅ Same counts
+Resource Usage	High CPU during Spark batch	    Low CPU, quick execution
+Real-Time Output	✅ Yes	                   ❌ No, only post-analysis
+Scalability	Good with tuning	Depends on query efficiency

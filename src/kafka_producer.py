@@ -1,120 +1,167 @@
 import random
-from kafka import KafkaProducer
-import mysql.connector
 import time
 import json
+import mysql.connector
+import signal
+from datetime import datetime
+from kafka import KafkaProducer
 
-# connect to the MySQL database
+# Graceful shutdown flag
+running = True
+def handle_sigint(sig, frame):
+    global running
+    print("Shutting down Kafka producer...")
+    running = False
+signal.signal(signal.SIGINT, handle_sigint)
+
+# MySQL connection
 mydb = mysql.connector.connect(
     host="localhost",
     user="root",
     password="CodeMrunal2004",
     database="tweet_hashtags_db"
 )
+cursor = mydb.cursor(dictionary=True)
 
-# create a cursor to execute SQL queries
-cursor = mydb.cursor()
-
-# initialize Kafka producer
+# Kafka producer
 producer = KafkaProducer(bootstrap_servers=['localhost:9092'])
 
-# continuously publish new tweets and hashtags to Kafka
-while True:
+# Store last seen timestamp for tweets
+last_tweet_time = '2000-01-01 00:00:00'
+
+while running:
     try:
-        # select a random number of tweets to retrieve
-        num_tweets = random.randint(1, 25)
-        
-        #----------------------------------------------------------------------------------
+        # =================== TWEETS ===================
+        try:
+            print(f"[{datetime.now()}] Fetching new tweets...")
+            sql_tweets = f"""
+                SELECT tweet_id, tweet, date_time, language 
+                FROM tweets 
+                WHERE date_time > '{last_tweet_time}' 
+                ORDER BY date_time ASC 
+                LIMIT 25
+            """
+            cursor.execute(sql_tweets)
+            tweets = cursor.fetchall()
 
-        # select all tweets that were added since the last time the loop ran
-        sql_tweets = "SELECT tweet_id, tweet, date_time, language FROM tweets WHERE date_time > '2021-01-01 19:51:27 EDT' - INTERVAL 10 SECOND LIMIT 0, 25"
-        cursor.execute(sql_tweets)
-        # print the SQL query being executed
-        print("Executing SQL query for tweets...")
-        # publish each new tweet to the Kafka topic
-        for tweet_id, tweet, date_time, language in cursor:
-            message_dict = {
-            "tweet_id": tweet_id,
-            "tweet": tweet,
-            "date_time": str(date_time),
-            "language": language
-            }
-            message = bytes(json.dumps(message_dict), encoding='utf-8')
-        
-            # print the data being processed
-            print("Publishing tweet:", tweet)
-        
-            # publish the message to the Kafka topic
-            producer.send('tweets', value=message)
+            for row in tweets:
+                message_dict = {
+                    "tweet_id": row["tweet_id"],
+                    "tweet": row["tweet"],
+                    "date_time": str(row["date_time"]),
+                    "language": row["language"]
+                }
+                producer.send('tweets', value=bytes(json.dumps(message_dict), encoding='utf-8'))
+                print(f"[{datetime.now()}] Published tweet: {row['tweet']}")
 
-        #----------------------------------------------------------------------------------
+            if tweets:
+                last_tweet_time = str(tweets[-1]['date_time'])
 
-        # select a random number of hashtags to retrieve
-        num_hashtags = random.randint(1, 10)
+            producer.flush()
 
-        # select all new hashtags that were added since the last time the loop ran
-        sql_hashtags = "SELECT hashtag_id, hashtag FROM hashtags WHERE hashtag_id < (SELECT MAX(hashtag_id) FROM tweet_hashtags)"
-        cursor.execute(sql_hashtags)
+        except Exception as e:
+            print(f"[ERROR] TWEETS: {e}")
 
-        # print the SQL query being executed
-        print("Executing SQL query for hashtags...")
+        # =================== HASHTAGS ===================
+        try:
+            print(f"[{datetime.now()}] Fetching hashtags...")
+            sql_hashtags = """
+                SELECT hashtag_id, hashtag 
+                FROM hashtags 
+                WHERE hashtag_id < (SELECT MAX(hashtag_id) FROM tweet_hashtags)
+                LIMIT 10
+            """
+            cursor.execute(sql_hashtags)
+            hashtags = cursor.fetchall()
 
-        # publish each new hashtag to the Kafka topic
-        for hashtag_id, hashtag in cursor:
-           # serialize the row data to bytes
-            message = bytes(f"{hashtag_id},{hashtag}", encoding='utf-8')
-            
-            # print the data being processed
-            print("Publishing hashtag:", hashtag)
-            # publish the message to the Kafka topic
-            producer.send('hashtags', value=message)
+            for row in hashtags:
+                message_dict = {
+                    "hashtag_id": row["hashtag_id"],
+                    "hashtag": row["hashtag"]
+                }
+                producer.send('hashtags', value=bytes(json.dumps(message_dict), encoding='utf-8'))
+                print(f"[{datetime.now()}] Published hashtag: {row['hashtag']}")
 
-        #----------------------------------------------------------------------------------
+            producer.flush()
 
-        # select the top 10 tweets with the most hashtags
-        sql_top_tweets = "SELECT t.tweet_id, t.tweet, t.date_time, t.language, COUNT(th.hashtag_id) as hashtag_count FROM tweets t JOIN tweet_hashtags th ON t.tweet_id = th.tweet_id GROUP BY t.tweet_id ORDER BY hashtag_count DESC LIMIT 10"
-        cursor.execute(sql_top_tweets)
+        except Exception as e:
+            print(f"[ERROR] HASHTAGS: {e}")
 
-        # print the SQL query being executed
-        print("Executing SQL query for top tweets...")
+        # =================== TOP TWEETS ===================
+        try:
+            print(f"[{datetime.now()}] Fetching top tweets...")
+            sql_top_tweets = """
+                SELECT t.tweet_id, t.tweet, t.date_time, t.language, COUNT(th.hashtag_id) as hashtag_count 
+                FROM tweets t 
+                JOIN tweet_hashtags th ON t.tweet_id = th.tweet_id 
+                GROUP BY t.tweet_id 
+                ORDER BY hashtag_count DESC 
+                LIMIT 10
+            """
+            cursor.execute(sql_top_tweets)
+            top_tweets = cursor.fetchall()
 
-        # publish each top tweet to the Kafka topic
-        for tweet_id, tweet, date_time, language, hashtag_count in cursor:
-             # serialize the row data to bytes
-            message = bytes(f"{tweet_id},{tweet},{date_time},{language},{hashtag_count}", encoding='utf-8')
-            
-            # print the data being processed
-            print("Publishing top tweet:", tweet)
-            # publish the message to the Kafka topic
-            producer.send('top_tweets', value=message)
+            for row in top_tweets:
+                message_dict = {
+                    "tweet_id": row["tweet_id"],
+                    "tweet": row["tweet"],
+                    "date_time": str(row["date_time"]),
+                    "language": row["language"],
+                    "hashtag_count": row["hashtag_count"]
+                }
+                producer.send('top_tweets', value=bytes(json.dumps(message_dict), encoding='utf-8'))
+                print(f"[{datetime.now()}] Published top tweet: {row['tweet']}")
 
-        #----------------------------------------------------------------------------------
+            producer.flush()
 
-        # select the hashtags that appear in the top 10 tweets
-        sql_top_hashtags = "SELECT h.hashtag_id, h.hashtag, SUM(th.count) as count FROM hashtags h JOIN tweet_hashtags th ON h.hashtag_id = th.hashtag_id JOIN (SELECT t.tweet_id FROM tweets t JOIN tweet_hashtags th ON t.tweet_id = th.tweet_id GROUP BY t.tweet_id ORDER BY COUNT(th.hashtag_id) DESC LIMIT 10) AS subquery ON th.tweet_id = subquery.tweet_id GROUP BY h.hashtag_id ORDER BY count DESC LIMIT 10;"
-        
-        # execute the SQL query to retrieve the top hashtags
-        cursor.execute(sql_top_hashtags)
+        except Exception as e:
+            print(f"[ERROR] TOP TWEETS: {e}")
 
-        # print the SQL query being executed
-        print("Executing SQL query for top hashtags...")
+        # =================== TOP HASHTAGS ===================
+        try:
+            print(f"[{datetime.now()}] Fetching top hashtags...")
+            sql_top_hashtags = """
+                SELECT h.hashtag_id, h.hashtag, SUM(th.count) as count 
+                FROM hashtags h 
+                JOIN tweet_hashtags th ON h.hashtag_id = th.hashtag_id 
+                JOIN (
+                    SELECT t.tweet_id 
+                    FROM tweets t 
+                    JOIN tweet_hashtags th ON t.tweet_id = th.tweet_id 
+                    GROUP BY t.tweet_id 
+                    ORDER BY COUNT(th.hashtag_id) DESC 
+                    LIMIT 10
+                ) AS subquery ON th.tweet_id = subquery.tweet_id 
+                GROUP BY h.hashtag_id 
+                ORDER BY count DESC 
+                LIMIT 10
+            """
+            cursor.execute(sql_top_hashtags)
+            top_hashtags = cursor.fetchall()
 
-        # publish each top hashtag to the Kafka topic
-        for hashtag_id, hashtag, count in cursor:
-            # serialize the row data to bytes
-            message = bytes(f"{hashtag_id},{hashtag},{count}", encoding='utf-8')
-            
-            # print the data being processed
-            print("Publishing top hashtag:", hashtag)
-            # publish the message to the Kafka topic
-            producer.send('top_hashtags', value=message)
-        
-        #----------------------------------------------------------------------------------
+            for row in top_hashtags:
+                message_dict = {
+                    "hashtag_id": row["hashtag_id"],
+                    "hashtag": row["hashtag"],
+                    "count": int(row["count"])
+                }
+                producer.send('top_hashtags', value=bytes(json.dumps(message_dict), encoding='utf-8'))
+                print(f"[{datetime.now()}] Published top hashtag: {row['hashtag']}")
 
-        # sleep for a random amount of time between 5 and 15 seconds
+            producer.flush()
+
+        except Exception as e:
+            print(f"[ERROR] TOP HASHTAGS: {e}")
+
+        # Sleep for 5 to 15 seconds
         time.sleep(random.randint(5, 15))
-        
+
     except Exception as e:
-        print(e)
-        # in case of any error, sleep for a shorter time and try again
+        print(f"[ERROR] Outer loop: {e}")
         time.sleep(2)
+
+# Cleanup
+cursor.close()
+mydb.close()
+producer.close()
+print("Producer stopped.")
