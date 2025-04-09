@@ -3,6 +3,10 @@ from pyspark.sql.functions import col, from_json, expr
 from pyspark.sql.types import StructType, StringType
 import mysql.connector
 import time
+import psutil
+
+
+
 # Define schema
 schema = StructType() \
     .add("tweet_id", StringType()) \
@@ -63,6 +67,8 @@ def write_to_mysql(batch_df, batch_id):
         log_message = f"[INFO] Batch {batch_id} processed in {elapsed:.2f} seconds"
         print(log_message)
         print(f"[INFO] Updated language counts: {lang_counts.to_dict('records')}")
+        print(f"CPU Usage: {psutil.cpu_percent()}%")
+        print(f"Memory Usage: {psutil.virtual_memory().percent}%")
         with open("batch_execution_times.log", "a") as f:
             f.write(f"Batch {batch_id}: {elapsed:.2f} seconds\n")
     except mysql.connector.Error as err:

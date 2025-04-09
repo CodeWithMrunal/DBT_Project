@@ -154,7 +154,8 @@ while running:
             print(f"[ERROR] TOP HASHTAGS: {e}")
 
         # Sleep for 5 to 15 seconds
-        time.sleep(random.randint(5, 15))
+        # time.sleep(random.randint(5, 15))
+        time.sleep(5)
 
     except Exception as e:
         print(f"[ERROR] Outer loop: {e}")
